@@ -1,0 +1,315 @@
+﻿@page "/dashboard"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - Mindful Journal</PageTitle>
+
+<div class="dashboard-grid">
+
+    <!-- LEFT: Today's Entry -->
+    <div class="dashboard-left">
+        <div class="card">
+            <h3 class="card-title">Today's Entry</h3>
+
+            <div class="form-group">
+                <label>Title</label>
+                <input @bind="title" type="text"
+                       placeholder="What's on your mind?" />
+            </div>
+
+            <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:12px;">
+                Date: @DateTime.Today.ToString("MMMM dd, yyyy")
+            </div>
+
+            <div class="form-group">
+                <label>Entry Content</label>
+                <textarea @bind="content" rows="4"
+                          placeholder="How are you feeling today?..."
+                          style="width:100%; padding:10px; border:1px solid rgba(255,255,255,0.1);
+                border-radius:8px; font-size:14px;
+                resize:vertical; font-family:inherit;
+                outline:none; background:rgba(255,255,255,0.06);
+                color:rgba(255,255,255,0.9);">
+            </textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Current Mood</label>
+            <div class="mood-selector">
+                @foreach (var mood in moods)
+                {
+                    var m = mood;
+                    <div class="mood-btn @(selectedMood == m.Name ? "selected" : "")"
+                         @onclick="@(() => selectedMood = m.Name)">
+                        <span class="mood-emoji">@m.Emoji</span>
+                        <span class="mood-label">@m.Name</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(saveMessage))
+        {
+            <div class="alert-success">@saveMessage</div>
+        }
+
+        <button class="btn-primary" @onclick="SaveEntry"
+                disabled="@isSaving">
+            @(isSaving ? "Saving..." : "Save Entry")
+        </button>
+    </div>
+</div>
+
+<!-- RIGHT: Analytics -->
+<div class="dashboard-right">
+    <div class="card">
+        <h3 class="card-title">Analytics Dashboard</h3>
+        @if (monthlyMoods.Count == 0)
+        {
+            <div style="text-align:center; padding:20px;
+                color:rgba(255,255,255,0.3);">
+                <div style="font-size:40px; margin-bottom:8px;">📊</div>
+                <div>Add entries to see your mood analytics!</div>
+            </div>
+        }
+        else
+        {
+            <div class="charts-row">
+                <div class="chart-box">
+                    <div class="chart-label">
+                        Mood Distribution (This Month)
+                    </div>
+                    <canvas id="pieChart" width="200" height="200">
+                    </canvas>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-label">
+                        Emotional Trend (Weekly)
+                    </div>
+                    <canvas id="lineChart" width="280" height="200">
+                    </canvas>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- BOTTOM LEFT: Suggestions -->
+<div class="dashboard-bottom-left">
+    <div class="card">
+        <h3 class="card-title">Summary & Suggestions</h3>
+        @if (suggestions.Count == 0)
+        {
+            <p style="color:rgba(255,255,255,0.3); font-size:13px;">
+                Add more entries to get personalized suggestions!
+            </p>
+        }
+        else
+        {
+            <div class="suggestions-row">
+                @foreach (var suggestion in suggestions)
+                {
+                    <div class="suggestion-card">@suggestion</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- BOTTOM RIGHT: Recent Entries -->
+<div class="dashboard-bottom-right">
+    <div class="card">
+        <h3 class="card-title">Recent Journal Entries</h3>
+        @if (recentEntries.Count == 0)
+        {
+            <div style="text-align:center; padding:20px;
+                color:rgba(255,255,255,0.3);">
+                <div style="font-size:40px; margin-bottom:8px;">📖</div>
+                <div>No entries yet. Write your first one!</div>
+            </div>
+        }
+        else
+        {
+            @foreach (var entry in recentEntries)
+            {
+                <div class="recent-entry-item">
+                    <div class="recent-entry-info">
+                        <span class="recent-entry-date">
+                            @entry.EntryDate.ToString("MMM dd")
+                        </span>
+                        <span class="recent-entry-title">
+                            | @entry.Title
+                        </span>
+                    </div>
+                    <span class="mood-badge @entry.Mood.ToLower()">
+                        @GetMoodEmoji(entry.Mood) @entry.Mood
+                    </span>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+</div>
+
+@code {
+    string userId = "";
+    string userName = "";
+    string title = "";
+    string content = "";
+    string selectedMood = "Happy";
+    string saveMessage = "";
+    bool isSaving = false;
+    bool chartsRendered = false;
+    bool dataLoaded = false;
+
+    List<JournalEntry> recentEntries = new();
+    List<string> suggestions = new();
+    Dictionary<string, int> monthlyMoods = new();
+    Dictionary<string, int> weeklyMoods = new();
+
+    List<(string Name, string Emoji)> moods = new()
+    {
+        ("Happy", "😄"),
+        ("Sad", "😢"),
+        ("Stressed", "😫"),
+        ("Angry", "😡"),
+        ("Neutral", "😐")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // ✅ Redirect admin to admin panel automatically
+        if (user.IsInRole("Admin"))
+        {
+            Navigation.NavigateTo("/admin", forceLoad: true);
+            return;
+        }
+
+        userId = user.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        userName = user.Identity?.Name ?? "";
+
+        await LoadData();
+    }
+
+    async Task LoadData()
+    {
+        recentEntries = await JournalService.GetRecentEntriesAsync(userId, 3);
+        suggestions = await JournalService.GetSuggestionsAsync(userId);
+        monthlyMoods = await JournalService.GetMonthlyMoodCountsAsync(userId);
+        weeklyMoods = await JournalService.GetWeeklyMoodCountsAsync(userId);
+        dataLoaded = true;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (dataLoaded && !chartsRendered && monthlyMoods.Count > 0)
+        {
+            chartsRendered = true;
+            await RenderCharts();
+        }
+    }
+
+    async Task RenderCharts()
+    {
+        var moodColors = new Dictionary<string, string>
+        {
+            {"Happy","#4CAF50"}, {"Sad","#2196F3"},
+            {"Stressed","#FF9800"}, {"Angry","#F44336"},
+            {"Neutral","#9E9E9E"}, {"Calm","#00BCD4"},
+            {"Anxious","#9C27B0"}
+        };
+
+        var labels = monthlyMoods.Keys.ToArray();
+        var values = monthlyMoods.Values.ToArray();
+        var colors = labels.Select(l =>
+            moodColors.ContainsKey(l) ? moodColors[l] : "#ccc").ToArray();
+
+        await JS.InvokeVoidAsync("renderPieChart",
+            "pieChart", labels, values, colors);
+
+        var weekLabels = new[]
+            { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+        var datasets = new List<object>();
+        foreach (var mood in weeklyMoods)
+        {
+            var color = moodColors.ContainsKey(mood.Key)
+                ? moodColors[mood.Key] : "#ccc";
+            var data = new int[7];
+            for (int i = 0; i < 7; i++)
+                data[i] = i == 6 ? mood.Value : 0;
+
+            datasets.Add(new
+            {
+                label = mood.Key,
+                data = data,
+                borderColor = color,
+                backgroundColor = color + "22",
+                tension = 0.4,
+                fill = false
+            });
+        }
+
+        await JS.InvokeVoidAsync("renderLineChart",
+            "lineChart", weekLabels, datasets);
+    }
+
+    string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😄",
+        "Sad" => "😢",
+        "Stressed" => "😫",
+        "Angry" => "😡",
+        "Neutral" => "😐",
+        "Calm" => "😌",
+        "Anxious" => "😰",
+        _ => "😐"
+    };
+
+    async Task SaveEntry()
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            saveMessage = "⚠️ Please write something in the entry.";
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        var entry = new JournalEntry
+        {
+            UserId = userId,
+            UserName = userName,
+            Title = string.IsNullOrWhiteSpace(title)
+                ? $"Entry - {DateTime.Today:MMM dd}" : title,
+            Content = content,
+            Mood = selectedMood,
+            EntryDate = DateTime.Today,
+            CreatedAt = DateTime.Now
+        };
+
+        await JournalService.AddEntryAsync(entry);
+
+        saveMessage = "✅ Entry saved successfully!";
+        title = "";
+        content = "";
+        selectedMood = "Happy";
+        isSaving = false;
+        chartsRendered = false;
+        dataLoaded = false;
+
+        await LoadData();
+    }
+}

@@ -1,0 +1,163 @@
+﻿@page "/edit-entry/{EntryId:int}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Entry - Mindful Journal</PageTitle>
+
+<div class="card" style="max-width:700px;">
+    <h2 style="font-size:22px; font-weight:700; color:#333; margin-bottom:24px;">
+        ✏️ Edit Journal Entry
+    </h2>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert-success">@successMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-message">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p style="color:#aaa;">Loading entry...</p>
+    }
+    else
+    {
+        <div class="form-group">
+            <label>Title</label>
+            <input @bind="title" type="text" placeholder="Entry title..." />
+        </div>
+
+        <div class="form-group">
+            <label>Date</label>
+            <input @bind="entryDate" type="date"
+                   style="width:100%; padding:9px 12px; border:1px solid #ddd;
+            border-radius:8px; font-size:14px; outline:none;" />
+        </div>
+
+        <div class="form-group">
+            <label>Mood</label>
+            <div class="mood-selector">
+                @foreach (var mood in moods)
+                {
+                    var m = mood;
+                    <div class="mood-btn @(selectedMood == m.Name ? "selected" : "")"
+                         @onclick="@(() => selectedMood = m.Name)">
+                        <span class="mood-emoji">@m.Emoji</span>
+                        <span class="mood-label">@m.Name</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Entry Content</label>
+            <textarea @bind="content" rows="8"
+                      style="width:100%; padding:10px 12px; border:1px solid #ddd;
+                border-radius:8px; font-size:14px; resize:vertical;
+                font-family:inherit; outline:none;">
+            </textarea>
+        </div>
+
+        <div style="display:flex; gap:12px; margin-top:8px;">
+            <button class="btn-primary" style="flex:1;"
+                    @onclick="UpdateEntry" disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Update Entry")
+            </button>
+            <button @onclick="GoBack"
+                    style="flex:1; padding:12px; border:1px solid #ddd;
+                color:#666; background:white; border-radius:8px;
+                font-size:15px; cursor:pointer; font-weight:600;">
+                Cancel
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int EntryId { get; set; }
+
+    string userId = "";
+    string title = "";
+    string content = "";
+    string selectedMood = "Happy";
+    string successMessage = "";
+    string errorMessage = "";
+    bool isSaving = false;
+    bool isLoading = true;
+    DateTime entryDate = DateTime.Today;
+
+    List<(string Name, string Emoji)> moods = new()
+    {
+        ("Happy", "😄"),
+        ("Calm", "😌"),
+        ("Anxious", "😰"),
+        ("Sad", "😢"),
+        ("Angry", "😡"),
+        ("Stressed", "😫"),
+        ("Neutral", "😐")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        var entry = await JournalService.GetEntryByIdAsync(EntryId);
+
+        if (entry == null || entry.UserId != userId)
+        {
+            Navigation.NavigateTo("/view-entries");
+            return;
+        }
+
+        title = entry.Title;
+        content = entry.Content;
+        selectedMood = entry.Mood;
+        entryDate = entry.EntryDate;
+        isLoading = false;
+    }
+
+    async Task UpdateEntry()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            errorMessage = "Content cannot be empty.";
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        var entry = new JournalEntry
+        {
+            EntryId = EntryId,
+            UserId = userId,
+            Title = string.IsNullOrWhiteSpace(title)
+                ? $"Entry - {entryDate:MMM dd}" : title,
+            Content = content,
+            Mood = selectedMood,
+            EntryDate = entryDate,
+            UpdatedAt = DateTime.Now
+        };
+
+        await JournalService.UpdateEntryAsync(entry);
+
+        successMessage = "Entry updated successfully! ✅";
+        isSaving = false;
+        StateHasChanged();
+
+        await Task.Delay(1500);
+        Navigation.NavigateTo("/view-entries");
+    }
+
+    void GoBack() => Navigation.NavigateTo("/view-entries");
+}

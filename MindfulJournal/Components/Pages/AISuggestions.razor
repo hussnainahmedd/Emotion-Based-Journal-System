@@ -1,0 +1,267 @@
+﻿@page "/ai-suggestions"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+@inject MindfulJournal.Services.AIService AIService
+
+<PageTitle>AI Suggestions - Mindful Journal</PageTitle>
+
+<h2 style="font-size:22px; font-weight:700;
+    color:rgba(255,255,255,0.9); margin-bottom:20px;">
+    🤖 AI-Powered Wellness
+</h2>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+    <!-- AI Suggestion -->
+    <div class="card">
+        <div class="card-title">✨ Personalized AI Suggestion</div>
+        @if (isLoadingSuggestion)
+        {
+            <div style="text-align:center; padding:20px;">
+                <div class="ai-loading">
+                    <span>🤖</span>
+                    <p style="color:rgba(255,255,255,0.5); margin-top:10px;
+                        font-size:13px;">
+                        AI is analyzing your journal...
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div style="background:rgba(77,182,172,0.08);
+                border:1px solid rgba(77,182,172,0.2);
+                border-radius:10px; padding:16px;
+                color:rgba(255,255,255,0.85);
+                font-size:14px; line-height:1.7;
+                margin-bottom:14px;">
+                @aiSuggestion
+            </div>
+        }
+        <button class="btn-primary" @onclick="GetAISuggestion"
+                disabled="@isLoadingSuggestion">
+            @(isLoadingSuggestion ? "Analyzing..." : "🔄 Get New Suggestion")
+        </button>
+    </div>
+
+    <!-- Mood Prediction -->
+    <div class="card">
+        <div class="card-title">📊 Tomorrow's Mood Prediction</div>
+        @if (isLoadingPrediction)
+        {
+            <div style="text-align:center; padding:20px; color:rgba(255,255,255,0.5); font-size:13px;">
+                Predicting your mood...
+            </div>
+        }
+        else
+        {
+            <div style="background:rgba(100,181,246,0.08);
+                border:1px solid rgba(100,181,246,0.2);
+                border-radius:10px; padding:16px;
+                color:rgba(255,255,255,0.85);
+                font-size:14px; line-height:1.7;
+                margin-bottom:14px;">
+                @moodPrediction
+            </div>
+        }
+        <button class="btn-primary"
+                style="background:linear-gradient(135deg,#42A5F5,#1565C0);"
+                @onclick="GetMoodPrediction"
+                disabled="@isLoadingPrediction">
+            @(isLoadingPrediction ? "Predicting..." : "🔮 Predict Tomorrow")
+        </button>
+    </div>
+
+</div>
+
+<!-- AI Chat -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-title">💬 Chat With Your Journal</div>
+    <p style="color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:16px;">
+        Ask questions about your mood patterns and journal entries
+    </p>
+
+    <!-- Chat Messages -->
+    <div style="min-height:200px; max-height:350px; overflow-y:auto;
+        background:rgba(0,0,0,0.2); border-radius:10px;
+        padding:16px; margin-bottom:16px;
+        border:1px solid rgba(255,255,255,0.06);"
+         id="chatBox">
+        @if (chatMessages.Count == 0)
+        {
+            <div style="text-align:center; color:rgba(255,255,255,0.25);
+                padding:40px; font-size:13px;">
+                Ask me anything about your journal! 💭
+            </div>
+        }
+        @foreach (var msg in chatMessages)
+        {
+            <div style="margin-bottom:12px; display:flex;
+                justify-content:@(msg.IsUser ? "flex-end" : "flex-start");">
+                <div style="max-width:75%;
+                    background:@(msg.IsUser
+                                                     ? "rgba(77,182,172,0.2)"
+                                                     : "rgba(255,255,255,0.06)");
+                    border:1px solid @(msg.IsUser
+                                                     ? "rgba(77,182,172,0.3)"
+                                                     : "rgba(255,255,255,0.1)");
+                    border-radius:12px; padding:10px 14px;
+                    font-size:13px;
+                    color:rgba(255,255,255,0.85);
+                    line-height:1.5;">
+                    <div style="font-size:11px;
+                        color:rgba(255,255,255,0.35);
+                        margin-bottom:4px;">
+                        @(msg.IsUser ? "You" : "🤖 AI")
+                    </div>
+                    @msg.Text
+                </div>
+            </div>
+        }
+        @if (isLoadingChat)
+        {
+            <div style="display:flex; align-items:center; gap:8px;
+                color:rgba(255,255,255,0.4); font-size:13px;">
+                <span>🤖</span> AI is thinking...
+            </div>
+        }
+    </div>
+
+    <!-- Suggested Questions -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+        @foreach (var q in suggestedQuestions)
+        {
+            <button @onclick="@(() => AskQuestion(q))"
+                    style="padding:6px 12px;
+                background:rgba(77,182,172,0.08);
+                color:rgba(77,182,172,0.8);
+                border:1px solid rgba(77,182,172,0.2);
+                border-radius:20px; cursor:pointer;
+                font-size:12px; font-weight:600;
+                font-family:'Plus Jakarta Sans',sans-serif;
+                transition:all 0.2s;">
+                @q
+            </button>
+        }
+    </div>
+
+    <!-- Chat Input -->
+    <div style="display:flex; gap:10px;">
+        <input @bind="chatInput"
+               @onkeypress="HandleKeyPress"
+               type="text"
+               placeholder="Ask about your journal... e.g. When was I most happy?"
+               style="flex:1; padding:10px 14px;
+        background:rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.1);
+        border-radius:10px; color:rgba(255,255,255,0.9);
+        font-family:'Plus Jakarta Sans',sans-serif;
+        font-size:14px; outline:none;" />
+        <button class="btn-primary" style="width:auto; padding:10px 20px;"
+                @onclick="SendChatMessage"
+                disabled="@isLoadingChat">
+            Send
+        </button>
+    </div>
+</div>
+
+@code {
+    string userId = "";
+    string aiSuggestion = "Click the button to get your personalized AI suggestion!";
+    string moodPrediction = "Click the button to predict tomorrow's mood!";
+    string chatInput = "";
+    bool isLoadingSuggestion = false;
+    bool isLoadingPrediction = false;
+    bool isLoadingChat = false;
+
+    List<ChatMessage> chatMessages = new();
+    List<string> recentEntries = new();
+    List<string> moodHistory = new();
+    Dictionary<string, int> weeklyMoods = new();
+
+    List<string> suggestedQuestions = new()
+    {
+        "When was I most happy?",
+        "What triggers my stress?",
+        "How has my mood changed?",
+        "What should I focus on?"
+    };
+
+    record ChatMessage(string Text, bool IsUser);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        var entries = await JournalService.GetEntriesAsync(userId);
+        recentEntries = entries.Select(e => e.Content).ToList();
+        moodHistory = entries.Select(e => e.Mood).ToList();
+        weeklyMoods = await JournalService.GetWeeklyMoodCountsAsync(userId);
+    }
+
+    async Task GetAISuggestion()
+    {
+        isLoadingSuggestion = true;
+        StateHasChanged();
+        try
+        {
+            aiSuggestion = await AIService.GetAISuggestionAsync(
+                recentEntries, weeklyMoods);
+        }
+        catch { aiSuggestion = "Unable to get AI suggestion. Please try again."; }
+        isLoadingSuggestion = false;
+        StateHasChanged();
+    }
+
+    async Task GetMoodPrediction()
+    {
+        isLoadingPrediction = true;
+        StateHasChanged();
+        try
+        {
+            moodPrediction = await AIService.GetMoodPredictionAsync(moodHistory);
+        }
+        catch { moodPrediction = "Unable to predict mood. Please try again."; }
+        isLoadingPrediction = false;
+        StateHasChanged();
+    }
+
+    async Task SendChatMessage()
+    {
+        if (string.IsNullOrWhiteSpace(chatInput)) return;
+        await AskQuestion(chatInput);
+    }
+
+    async Task AskQuestion(string question)
+    {
+        chatMessages.Add(new ChatMessage(question, true));
+        chatInput = "";
+        isLoadingChat = true;
+        StateHasChanged();
+
+        try
+        {
+            var answer = await AIService.ChatWithJournalAsync(
+                question, recentEntries, moodHistory);
+            chatMessages.Add(new ChatMessage(answer, false));
+        }
+        catch
+        {
+            chatMessages.Add(new ChatMessage(
+                "Sorry, I couldn't process that. Try again!", false));
+        }
+
+        isLoadingChat = false;
+        StateHasChanged();
+    }
+
+    async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SendChatMessage();
+    }
+}

@@ -1,0 +1,202 @@
+﻿@page "/feedback"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Data.ApplicationDbContext DbContext
+
+<PageTitle>Feedback - Mindful Journal</PageTitle>
+
+<div style="max-width:650px;">
+    <h2 style="font-size:22px; font-weight:700;
+        color:rgba(255,255,255,0.9); margin-bottom:8px;">
+        💬 Feedback & Reviews
+    </h2>
+    <p style="color:rgba(255,255,255,0.4); font-size:14px; margin-bottom:24px;">
+        Help us improve Mindful Journal with your feedback
+    </p>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert-success" style="margin-bottom:20px;">
+            @successMessage
+        </div>
+    }
+
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Share Your Feedback</div>
+
+        <!-- Star Rating -->
+        <div class="form-group">
+            <label>Overall Rating</label>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                @for (int i = 1; i <= 5; i++)
+                {
+                    var star = i;
+                    <button @onclick="@(() => rating = star)"
+                            style="background:none; border:none;
+                        cursor:pointer; font-size:32px;
+                        transition:transform 0.15s;"
+                            title="@star stars">
+                        @(star <= rating ? "⭐" : "☆")
+                    </button>
+                }
+                <span style="color:rgba(255,255,255,0.5);
+                    font-size:13px; align-self:center;
+                    margin-left:8px;">
+                    @(rating > 0 ? $"{rating}/5" : "Select rating")
+                </span>
+            </div>
+        </div>
+
+        <!-- Category -->
+        <div class="form-group">
+            <label>Category</label>
+            <select @bind="category"
+                    style="width:100%; padding:10px 14px;
+                background:rgba(255,255,255,0.06);
+                border:1px solid rgba(255,255,255,0.1);
+                border-radius:10px;
+                color:rgba(255,255,255,0.9);
+                font-family:'Plus Jakarta Sans',sans-serif;
+                font-size:14px; outline:none;">
+                <option value="">Select category...</option>
+                <option value="Bug Report">🐛 Bug Report</option>
+                <option value="Feature Request">✨ Feature Request</option>
+                <option value="UI/UX">🎨 UI/UX Improvement</option>
+                <option value="Performance">⚡ Performance Issue</option>
+                <option value="General">💬 General Feedback</option>
+            </select>
+        </div>
+
+        <!-- Message -->
+        <div class="form-group">
+            <label>Your Message</label>
+            <textarea @bind="message" rows="5"
+                      placeholder="Tell us what you think, what's broken, or what could be better..."
+                      style="width:100%; padding:10px 14px;
+            background:rgba(255,255,255,0.06);
+            border:1px solid rgba(255,255,255,0.1);
+            border-radius:10px;
+            color:rgba(255,255,255,0.9);
+            font-family:'Plus Jakarta Sans',sans-serif;
+            font-size:14px; resize:vertical; outline:none;
+            min-height:120px;">
+        </textarea>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-message">@errorMessage</div>
+    }
+
+    <button class="btn-primary" @onclick="SubmitFeedback"
+            disabled="@isSubmitting">
+        @(isSubmitting ? "Submitting..." : "🚀 Submit Feedback")
+    </button>
+</div>
+
+<!-- Previous Feedback -->
+@if (myFeedbacks.Count > 0)
+{
+    <div class="card">
+        <div class="card-title">Your Previous Feedback</div>
+        @foreach (var fb in myFeedbacks)
+        {
+            <div style="padding:14px; border:1px solid rgba(255,255,255,0.06);
+                border-radius:10px; margin-bottom:10px;
+                background:rgba(255,255,255,0.03);">
+                <div style="display:flex; justify-content:space-between;
+                    align-items:center; margin-bottom:8px;">
+                    <span style="font-size:12px; font-weight:700;
+                        color:rgba(77,182,172,0.8);
+                        background:rgba(77,182,172,0.1);
+                        padding:3px 10px; border-radius:20px;">
+                        @fb.Category
+                    </span>
+                    <span style="font-size:11px; color:rgba(255,255,255,0.3);">
+                        @fb.SubmittedAt.ToString("MMM dd, yyyy")
+                    </span>
+                </div>
+                <div style="font-size:14px; color:rgba(255,255,255,0.75);
+                    line-height:1.5; margin-bottom:6px;">
+                    @fb.Message
+                </div>
+                <div style="font-size:16px;">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        @(i <= fb.Rating ? "⭐" : "☆")
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+</div>
+
+@code {
+    string userId = "";
+    string userEmail = "";
+    string category = "";
+    string message = "";
+    string successMessage = "";
+    string errorMessage = "";
+    int rating = 0;
+    bool isSubmitting = false;
+    List<MindfulJournal.Models.Feedback> myFeedbacks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        userEmail = user.Identity?.Name ?? "";
+
+        myFeedbacks = DbContext.Feedbacks
+            .Where(f => f.UserId == userId)
+            .OrderByDescending(f => f.SubmittedAt)
+            .ToList();
+    }
+
+    async Task SubmitFeedback()
+    {
+        errorMessage = "";
+
+        if (rating == 0)
+        { errorMessage = "Please select a rating."; return; }
+        if (string.IsNullOrWhiteSpace(category))
+        { errorMessage = "Please select a category."; return; }
+        if (string.IsNullOrWhiteSpace(message))
+        { errorMessage = "Please write your feedback."; return; }
+
+        isSubmitting = true;
+        StateHasChanged();
+
+        var feedback = new MindfulJournal.Models.Feedback
+        {
+            UserId = userId,
+            UserEmail = userEmail,
+            Category = category,
+            Message = message,
+            Rating = rating,
+            SubmittedAt = DateTime.Now
+        };
+
+        DbContext.Feedbacks.Add(feedback);
+        await DbContext.SaveChangesAsync();
+
+        successMessage = "Thank you for your feedback! 🎉";
+        message = "";
+        category = "";
+        rating = 0;
+        isSubmitting = false;
+
+        myFeedbacks = DbContext.Feedbacks
+            .Where(f => f.UserId == userId)
+            .OrderByDescending(f => f.SubmittedAt)
+            .ToList();
+
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,400 @@
+﻿@page "/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject MindfulJournal.Services.JournalService JournalService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Settings - Mindful Journal</PageTitle>
+
+<div style="max-width:650px;">
+
+    <div style="margin-bottom:28px;">
+        <h2 style="font-size:24px; font-weight:800;
+            color:rgba(255,255,255,0.9); margin-bottom:4px;">
+            ⚙️ Settings
+        </h2>
+        <p style="font-size:13px; color:rgba(255,255,255,0.35);">
+            Customize your Mindful Journal experience
+        </p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert-success" style="margin-bottom:20px;">
+            ✅ @successMessage
+        </div>
+    }
+
+    <!-- Account Section -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">👤 Account</div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;
+            border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div>
+                <div style="font-weight:600; color:rgba(255,255,255,0.85);
+                    font-size:14px;">
+                    Edit Profile
+                </div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.35);
+                    margin-top:2px;">
+                    Update name, photo, bio and password
+                </div>
+            </div>
+            <button @onclick="@(() => Navigation.NavigateTo("/profile"))"
+                    style="@TealBtn">
+                Edit →
+            </button>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;
+            border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div>
+                <div style="font-weight:600; color:rgba(255,255,255,0.85);
+                    font-size:14px;">
+                    Logged in as
+                </div>
+                <div style="font-size:12px; color:rgba(77,182,172,0.7);
+                    margin-top:2px;">
+                    @userEmail
+                </div>
+            </div>
+            <form method="post" action="/logout">
+                <button type="submit" style="@RedBtn">
+                    Logout
+                </button>
+            </form>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;">
+            <div>
+                <div style="font-weight:600; color:rgba(255,255,255,0.85);
+                    font-size:14px;">
+                    Member Since
+                </div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.35);
+                    margin-top:2px;">
+                    @memberSince
+                </div>
+            </div>
+            <div style="font-size:20px;">🗓️</div>
+        </div>
+    </div>
+
+    <!-- Default Mood -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">😊 Default Mood</div>
+        <p style="font-size:13px; color:rgba(255,255,255,0.4);
+            margin-bottom:16px;">
+            Choose your default mood when opening the journal
+        </p>
+        <div class="mood-selector" style="margin-bottom:16px;">
+            @foreach (var mood in moods)
+            {
+                var m = mood;
+                <div class="mood-btn @(defaultMood == m.Name ? "selected" : "")"
+                     @onclick="@(() => defaultMood = m.Name)">
+                    <span class="mood-emoji">@m.Emoji</span>
+                    <span class="mood-label">@m.Name</span>
+                </div>
+            }
+        </div>
+        <button class="btn-primary" style="width:auto; padding:10px 24px;"
+                @onclick="SaveDefaultMood">
+            💾 Save Default Mood
+        </button>
+    </div>
+
+    <!-- Navigation Shortcuts -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">🚀 Quick Navigation</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <button @onclick="@(() => Navigation.NavigateTo("/add-entry"))"
+                    style="@QuickBtn("rgba(77,182,172,0.1)", "#4DB6AC", "rgba(77,182,172,0.3)")">
+                ✍️ Add New Entry
+            </button>
+            <button @onclick="@(() => Navigation.NavigateTo("/view-entries"))"
+                    style="@QuickBtn("rgba(100,181,246,0.1)", "#64B5F6", "rgba(100,181,246,0.3)")">
+                📋 View Entries
+            </button>
+            <button @onclick="@(() => Navigation.NavigateTo("/analytics"))"
+                    style="@QuickBtn("rgba(171,71,188,0.1)", "#AB47BC", "rgba(171,71,188,0.3)")">
+                📊 Analytics
+            </button>
+            <button @onclick="@(() => Navigation.NavigateTo("/ai-suggestions"))"
+                    style="@QuickBtn("rgba(255,167,38,0.1)", "#FFA726", "rgba(255,167,38,0.3)")">
+                🤖 AI Insights
+            </button>
+            <button @onclick="@(() => Navigation.NavigateTo("/suggestions"))"
+                    style="@QuickBtn("rgba(102,187,106,0.1)", "#66BB6A", "rgba(102,187,106,0.3)")">
+                💡 Suggestions
+            </button>
+            <button @onclick="@(() => Navigation.NavigateTo("/feedback"))"
+                    style="@QuickBtn("rgba(239,154,154,0.1)", "#EF9A9A", "rgba(239,154,154,0.3)")">
+                💬 Feedback
+            </button>
+        </div>
+    </div>
+
+    <!-- Data & Privacy -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">🔒 Data & Privacy</div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;
+            border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div>
+                <div style="font-weight:600; color:rgba(255,255,255,0.85);
+                    font-size:14px;">
+                    Export My Data
+                </div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.35);
+                    margin-top:2px;">
+                    Download all your journal entries as text
+                </div>
+            </div>
+            <button @onclick="ExportData" style="@TealBtn">
+                📤 Export
+            </button>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;
+            border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div>
+                <div style="font-weight:600; color:rgba(255,255,255,0.85);
+                    font-size:14px;">
+                    Your Stats
+                </div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.35);
+                    margin-top:2px;">
+                    @totalEntries entries • @streak day streak •
+                    Top mood: @topMood
+                </div>
+            </div>
+            <div style="font-size:20px;">📊</div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:14px 0;">
+            <div>
+                <div style="font-weight:600; color:#EF9A9A; font-size:14px;">
+                    Delete Account
+                </div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.35);
+                    margin-top:2px;">
+                    Permanently delete your account and all data
+                </div>
+            </div>
+            <button @onclick="ConfirmDeleteAccount" style="@RedBtn">
+                🗑️ Delete
+            </button>
+        </div>
+    </div>
+
+    <!-- About -->
+    <div class="card">
+        <div class="card-title">ℹ️ About</div>
+        <div style="font-size:13px; color:rgba(255,255,255,0.5);
+            line-height:2;">
+            <div style="font-size:16px; font-weight:800;
+                color:rgba(77,182,172,0.9); margin-bottom:6px;">
+                🧘 Mindful Journal v1.0
+            </div>
+            <div>Built with Blazor .NET 10 + SQL Server</div>
+            <div>AI powered by Groq (Llama 3)</div>
+            <div style="margin-top:8px; color:rgba(255,255,255,0.25);
+                font-size:11px;">
+                Your emotions matter. Journal daily. 💚
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Account Modal -->
+@if (showDeleteModal)
+{
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.75);
+        display:flex; align-items:center; justify-content:center;
+        z-index:999; backdrop-filter:blur(8px);">
+        <div class="modal-box">
+            <div style="font-size:40px; margin-bottom:12px;">⚠️</div>
+            <h3 style="color:rgba(255,255,255,0.9); margin-bottom:8px;
+                font-size:18px;">
+                Delete Account?
+            </h3>
+            <p style="color:rgba(255,255,255,0.4); font-size:13px;
+                margin-bottom:20px; line-height:1.6;">
+                This will permanently delete your account,
+                all journal entries, and data.
+                This action <strong style="color:#EF9A9A;">
+                cannot be undone!
+            </strong>
+        </p>
+        <div style="margin-bottom:16px;">
+            <input @bind="deleteConfirmText" type="text"
+                   placeholder="Type DELETE to confirm"
+                   style="width:100%; padding:10px 14px;
+            background:rgba(255,255,255,0.06);
+            border:1.5px solid rgba(244,67,54,0.3);
+            border-radius:8px;
+            color:rgba(255,255,255,0.9);
+            font-family:'Plus Jakarta Sans',sans-serif;
+            font-size:14px; outline:none;
+            text-align:center;" />
+        </div>
+        <div style="display:flex; gap:12px;">
+            <button @onclick="DeleteAccount"
+                    disabled="@(deleteConfirmText != "DELETE")"
+                    style="flex:1; padding:10px;
+                background:@(deleteConfirmText == "DELETE"
+                                                       ? "#ef5350" : "rgba(239,83,80,0.3)");
+                color:white; border:none; border-radius:8px;
+                cursor:@(deleteConfirmText == "DELETE"
+                                                       ? "pointer" : "not-allowed");
+                font-weight:700; font-size:14px;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+                Delete Forever
+            </button>
+            <button @onclick="CloseDeleteModal"
+                    style="flex:1; padding:10px;
+                background:rgba(255,255,255,0.08);
+                color:rgba(255,255,255,0.6);
+                border:none; border-radius:8px;
+                cursor:pointer; font-weight:700; font-size:14px;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    string userId = "";
+    string userEmail = "";
+    string memberSince = "";
+    string defaultMood = "Happy";
+    string successMessage = "";
+    string topMood = "None";
+    string deleteConfirmText = "";
+    int totalEntries = 0;
+    int streak = 0;
+    bool showDeleteModal = false;
+
+    List<(string Name, string Emoji)> moods = new()
+    {
+        ("Happy","😄"), ("Calm","😌"), ("Anxious","😰"),
+        ("Sad","😢"), ("Angry","😡"), ("Stressed","😫"), ("Neutral","😐")
+    };
+
+    string TealBtn =>
+        @"padding:8px 18px; background:rgba(77,182,172,0.12);
+          color:#4DB6AC; border:1px solid rgba(77,182,172,0.3);
+          border-radius:8px; cursor:pointer; font-size:13px;
+          font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;
+          transition:all 0.2s;";
+
+    string RedBtn =>
+        @"padding:8px 18px; background:rgba(244,67,54,0.1);
+          color:#EF9A9A; border:1px solid rgba(244,67,54,0.2);
+          border-radius:8px; cursor:pointer; font-size:13px;
+          font-weight:700; font-family:'Plus Jakarta Sans',sans-serif;";
+
+    string QuickBtn(string bg, string color, string border) =>
+        $@"padding:12px 16px; background:{bg}; color:{color};
+           border:1px solid {border}; border-radius:10px;
+           cursor:pointer; font-size:13px; font-weight:600;
+           font-family:'Plus Jakarta Sans',sans-serif;
+           transition:all 0.2s; text-align:left;";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider
+            .GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        userEmail = user.Identity?.Name ?? "";
+
+        var appUser = await UserManager.FindByIdAsync(userId);
+        if (appUser != null)
+            memberSince = appUser.CreatedDate.ToString("MMMM dd, yyyy");
+
+        totalEntries = await JournalService.GetTotalEntriesAsync(userId);
+        streak = await JournalService.GetStreakAsync(userId);
+        topMood = await JournalService.GetMostCommonMoodAsync(userId);
+    }
+
+    async Task SaveDefaultMood()
+    {
+        await Task.Delay(300);
+        successMessage = $"Default mood set to {defaultMood}!";
+        StateHasChanged();
+    }
+
+    async Task ExportData()
+    {
+        var entries = await JournalService.GetEntriesAsync(userId);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("=== MINDFUL JOURNAL EXPORT ===");
+        sb.AppendLine($"Exported: {DateTime.Now:MMM dd, yyyy HH:mm}");
+        sb.AppendLine($"Total Entries: {entries.Count}");
+        sb.AppendLine("================================\n");
+
+        foreach (var entry in entries)
+        {
+            sb.AppendLine($"Date: {entry.EntryDate:MMM dd, yyyy}");
+            sb.AppendLine($"Title: {entry.Title}");
+            sb.AppendLine($"Mood: {entry.Mood}");
+            sb.AppendLine($"Content: {entry.Content}");
+            sb.AppendLine("---");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("eval",
+            $"const a=document.createElement('a');" +
+            $"a.href='data:text/plain;base64,{base64}';" +
+            $"a.download='mindful_journal_export.txt';" +
+            $"a.click();");
+
+        successMessage = "Data exported successfully!";
+        StateHasChanged();
+    }
+
+    void ConfirmDeleteAccount()
+    {
+        deleteConfirmText = "";
+        showDeleteModal = true;
+        StateHasChanged();
+    }
+
+    void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        StateHasChanged();
+    }
+
+    async Task DeleteAccount()
+    {
+        if (deleteConfirmText != "DELETE") return;
+
+        var entries = await JournalService.GetEntriesAsync(userId);
+        foreach (var entry in entries)
+            await JournalService.DeleteEntryAsync(entry.EntryId);
+
+        var user = await UserManager.FindByIdAsync(userId);
+        if (user != null)
+            await UserManager.DeleteAsync(user);
+
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

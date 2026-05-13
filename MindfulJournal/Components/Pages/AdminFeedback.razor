@@ -1,0 +1,126 @@
+﻿@using MindfulJournal.Models
+@page "/admin/feedback"
+@rendermode InteractiveServer
+@layout MindfulJournal.Components.Layout.AdminLayout
+@inject MindfulJournal.Services.AdminService AdminService
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>All Feedback - Admin</PageTitle>
+
+<h2 style="font-size:22px; font-weight:700;
+    color:rgba(255,255,255,0.9); margin-bottom:20px;">
+    💬 All Feedback & Reviews
+</h2>
+
+<!-- Summary Cards -->
+<div style="display:grid; grid-template-columns:repeat(3,1fr);
+    gap:16px; margin-bottom:24px;">
+    <div class="card" style="text-align:center;">
+        <div style="font-size:28px; font-weight:800; color:#FFA726;">
+            @avgRating ⭐
+        </div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.4);
+            margin-top:4px;">
+            Average Rating
+        </div>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div style="font-size:28px; font-weight:800; color:#4DB6AC;">
+            @allFeedbacks.Count
+        </div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.4);
+            margin-top:4px;">
+            Total Reviews
+        </div>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div style="font-size:28px; font-weight:800; color:#66BB6A;">
+            @allFeedbacks.Count(f => f.Rating >= 4)
+        </div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.4);
+            margin-top:4px;">
+            Positive Reviews
+        </div>
+    </div>
+</div>
+
+<!-- Feedback List -->
+<div class="card">
+    @if (allFeedbacks.Count == 0)
+    {
+        <p style="text-align:center; color:rgba(255,255,255,0.3);
+            padding:40px;">
+            No feedback yet.
+        </p>
+    }
+    @foreach (var fb in allFeedbacks)
+    {
+        var f = fb;
+        <div style="padding:16px;
+            border:1px solid rgba(255,255,255,0.06);
+            border-radius:10px; margin-bottom:10px;
+            background:rgba(255,255,255,0.03);">
+            <div style="display:flex; justify-content:space-between;
+                align-items:flex-start; margin-bottom:8px;">
+                <div>
+                    <span style="font-size:12px; font-weight:700;
+                        color:rgba(77,182,172,0.8);
+                        background:rgba(77,182,172,0.1);
+                        padding:3px 10px; border-radius:20px;
+                        border:1px solid rgba(77,182,172,0.2);">
+                        @f.Category
+                    </span>
+                    <span style="margin-left:10px; font-size:12px;
+                        color:rgba(255,255,255,0.35);">
+                        @f.UserEmail
+                    </span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:14px;">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            <span>@(i <= f.Rating ? "⭐" : "☆")</span>
+                        }
+                    </span>
+                    <button @onclick="@(() => DeleteFeedback(f.FeedbackId))"
+                            style="padding:4px 10px;
+                        background:rgba(244,67,54,0.1);
+                        color:#EF9A9A;
+                        border:1px solid rgba(244,67,54,0.2);
+                        border-radius:6px; cursor:pointer;
+                        font-size:11px; font-weight:700;
+                        font-family:'Plus Jakarta Sans',sans-serif;">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+            <div style="font-size:13px; color:rgba(255,255,255,0.7);
+                line-height:1.6; margin-bottom:6px;">
+                @f.Message
+            </div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.25);">
+                @f.SubmittedAt.ToString("MMM dd, yyyy HH:mm")
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MindfulJournal.Models.Feedback> allFeedbacks = new();
+    private double avgRating = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allFeedbacks = await AdminService.GetAllFeedbacksAsync();
+        avgRating = await AdminService.GetAverageRatingAsync();
+    }
+
+    private async Task DeleteFeedback(int feedbackId)
+    {
+        await AdminService.DeleteFeedbackAsync(feedbackId);
+        allFeedbacks = await AdminService.GetAllFeedbacksAsync();
+        avgRating = await AdminService.GetAverageRatingAsync();
+        StateHasChanged();
+    }
+}

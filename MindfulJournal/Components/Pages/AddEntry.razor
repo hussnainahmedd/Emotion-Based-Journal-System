@@ -1,0 +1,228 @@
+﻿@page "/add-entry"
+
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+@inject NavigationManager Navigation
+
+<PageTitle>Add Entry - Mindful Journal</PageTitle>
+
+<div class="add-entry-grid">
+
+    <!-- LEFT: Form -->
+    <div class="add-entry-left">
+        <div class="card">
+            <h2 style="font-size:22px; font-weight:700; 
+                       color:#333; margin-bottom:24px;">
+                Add New Journal Entry
+            </h2>
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert-success">@successMessage</div>
+            }
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">@errorMessage</div>
+            }
+
+            <div class="form-group">
+                <label>Title <span style="color:#aaa;">(Optional)</span></label>
+                <input @bind="title" type="text"
+                       placeholder="Give your entry a title..." />
+            </div>
+
+            <div class="form-group">
+                <label>Date & Time</label>
+                <input @bind="entryDate" type="date"
+                       style="width:100%; padding:9px 12px;
+                              border:1px solid #ddd; border-radius:8px;
+                              font-size:14px; outline:none;" />
+            </div>
+
+            <div class="form-group">
+                <label>Mood Selection</label>
+                <div class="mood-selector">
+                    @foreach (var mood in moods)
+                    {
+                        <div class="mood-btn @(selectedMood == mood.Name ? "selected" : "")"
+                             @onclick="() => SelectMood(mood.Name)">
+                            <span class="mood-emoji">@mood.Emoji</span>
+                            <span class="mood-label">@mood.Name</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Entry Content</label>
+                <textarea @bind="content" rows="8"
+                    placeholder="How are you feeling right now? Describe your day..."
+                    style="width:100%; padding:10px 12px; border:1px solid #ddd;
+                           border-radius:8px; font-size:14px; resize:vertical;
+                           font-family:inherit; outline:none;">
+                </textarea>
+            </div>
+
+            <div style="display:flex; gap:12px; margin-top:8px;">
+                <button class="btn-primary" style="flex:1;"
+                        @onclick="SaveEntry" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Save Entry")
+                </button>
+                <button @onclick="Discard"
+                        style="flex:1; padding:12px; border:1px solid #e57373;
+                               color:#e57373; background:white; border-radius:8px;
+                               font-size:15px; cursor:pointer; font-weight:600;">
+                    Discard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: Contextual Insights -->
+    <div class="add-entry-right">
+
+        <div class="card" style="margin-bottom:16px;">
+            <div style="font-size:14px; font-weight:700;
+                        color:#333; margin-bottom:12px;">
+                Contextual Insights
+            </div>
+            <div style="font-size:12px; color:#888; margin-bottom:4px;">
+                Week's Average Mood
+            </div>
+            <div style="font-size:20px; font-weight:700;
+                        color:#4DB6AC; margin-bottom:4px;">
+                @weekAverageMood
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+            <div style="font-size:13px; font-weight:600;
+                        color:#555; margin-bottom:8px;">
+                This Week's Moods
+            </div>
+            @if (weeklyMoods.Count == 0)
+            {
+                <div style="font-size:13px; color:#aaa;">
+                    No entries this week yet.
+                </div>
+            }
+            @foreach (var mood in weeklyMoods)
+            {
+                <div style="display:flex; justify-content:space-between;
+                            font-size:13px; padding:4px 0; color:#555;">
+                    <span>@mood.Key</span>
+                    <span style="font-weight:600; color:#4DB6AC;">
+                        @mood.Value days
+                    </span>
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div style="font-size:13px; font-weight:600;
+                        color:#555; margin-bottom:8px;">
+                💡 Suggestion
+            </div>
+            <div style="font-size:13px; color:#666; line-height:1.6;">
+                @currentSuggestion
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    string userId = "";
+    string userName = "";
+    string title = "";
+    string content = "";
+    string selectedMood = "Happy";
+    string successMessage = "";
+    string errorMessage = "";
+    string weekAverageMood = "Neutral";
+    string currentSuggestion = "Keep reflecting on your emotions daily. 📖";
+    bool isSaving = false;
+    DateTime entryDate = DateTime.Today;
+    Dictionary<string, int> weeklyMoods = new();
+
+    List<(string Name, string Emoji)> moods = new()
+    {
+        ("Happy", "😄"),
+        ("Calm", "😌"),
+        ("Anxious", "😰"),
+        ("Sad", "😢"),
+        ("Angry", "😡")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirst(
+       System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        userName = user.Identity?.Name ?? "";
+
+        await LoadInsights();
+    }
+
+    async Task LoadInsights()
+    {
+        weeklyMoods = await JournalService.GetWeeklyMoodCountsAsync(userId);
+        var suggestions = await JournalService.GetSuggestionsAsync(userId);
+
+        if (weeklyMoods.Count > 0)
+            weekAverageMood = weeklyMoods
+                .OrderByDescending(m => m.Value).First().Key;
+
+        if (suggestions.Count > 0)
+            currentSuggestion = suggestions.First();
+    }
+
+    void SelectMood(string mood) => selectedMood = mood;
+
+    async Task SaveEntry()
+    {
+        errorMessage = "";
+        successMessage = "";
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            errorMessage = "Please write something in your entry.";
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        var entry = new JournalEntry
+        {
+            UserId = userId,
+            UserName = userName,
+            Title = string.IsNullOrWhiteSpace(title)
+                ? $"Entry - {entryDate:MMM dd}" : title,
+            Content = content,
+            Mood = selectedMood,
+            EntryDate = entryDate,
+            CreatedAt = DateTime.Now
+        };
+
+        await JournalService.AddEntryAsync(entry);
+
+        successMessage = "Entry saved successfully! ✅";
+        title = "";
+        content = "";
+        selectedMood = "Happy";
+        entryDate = DateTime.Today;
+        isSaving = false;
+
+        await LoadInsights();
+        StateHasChanged();
+    }
+
+    void Discard()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+}

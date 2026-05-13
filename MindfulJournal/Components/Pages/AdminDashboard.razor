@@ -1,0 +1,295 @@
+﻿@page "/admin"
+
+@rendermode InteractiveServer
+@layout MindfulJournal.Components.Layout.AdminLayout
+@inject MindfulJournal.Services.AdminService AdminService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+<!-- Stats Cards -->
+<div style="display:grid; grid-template-columns:repeat(4,1fr);
+    gap:16px; margin-bottom:28px;">
+
+    <div style="@GlassCard("0,212,255")">
+        <div style="font-size:28px; margin-bottom:8px;">👥</div>
+        <div style="font-size:32px; font-weight:800;
+            background:linear-gradient(135deg,#00D4FF,#4DB6AC);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;">
+            @totalUsers
+        </div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.4);
+            text-transform:uppercase; letter-spacing:0.8px;
+            margin-top:4px;">
+            Total Users
+        </div>
+    </div>
+
+    <div style="@GlassCard("66,165,245")">
+        <div style="font-size:28px; margin-bottom:8px;">📝</div>
+        <div style="font-size:32px; font-weight:800;
+            background:linear-gradient(135deg,#42A5F5,#1565C0);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;">
+            @totalEntries
+        </div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.4);
+            text-transform:uppercase; letter-spacing:0.8px;
+            margin-top:4px;">
+            Total Entries
+        </div>
+    </div>
+
+    <div style="@GlassCard("171,71,188")">
+        <div style="font-size:28px; margin-bottom:8px;">💬</div>
+        <div style="font-size:32px; font-weight:800;
+            background:linear-gradient(135deg,#AB47BC,#6A1B9A);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;">
+            @totalFeedbacks
+        </div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.4);
+            text-transform:uppercase; letter-spacing:0.8px;
+            margin-top:4px;">
+            Feedbacks
+        </div>
+    </div>
+
+    <div style="@GlassCard("255,167,38")">
+        <div style="font-size:28px; margin-bottom:8px;">⭐</div>
+        <div style="font-size:32px; font-weight:800;
+            background:linear-gradient(135deg,#FFA726,#E65100);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;">
+            @avgRating
+        </div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.4);
+            text-transform:uppercase; letter-spacing:0.8px;
+            margin-top:4px;">
+            Avg Rating
+        </div>
+    </div>
+</div>
+
+<!-- Today Banner -->
+<div style="background:linear-gradient(135deg,
+    rgba(0,212,255,0.12), rgba(77,182,172,0.08));
+    border:1px solid rgba(0,212,255,0.2);
+    border-radius:14px; padding:18px 24px;
+    display:flex; align-items:center; gap:16px;
+    margin-bottom:24px;
+    backdrop-filter:blur(16px);">
+    <div style="font-size:32px;">⚡</div>
+    <div>
+        <div style="font-size:14px; font-weight:700;
+            color:rgba(0,212,255,0.9);">
+            Today's Activity
+        </div>
+        <div style="font-size:13px; color:rgba(255,255,255,0.5);
+            margin-top:2px;">
+            @todayEntries new journal entries written today
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div style="display:grid; grid-template-columns:1fr 1fr;
+    gap:20px; margin-bottom:24px;">
+
+    <!-- Mood Distribution -->
+    <div style="@GlassPanel">
+        <div style="font-size:11px; font-weight:800;
+            color:rgba(0,212,255,0.7); letter-spacing:1px;
+            text-transform:uppercase; margin-bottom:18px;">
+            😊 Global Mood Distribution
+        </div>
+        @foreach (var mood in moodStats.OrderByDescending(m => m.Value))
+        {
+            var pct = totalEntries > 0
+                ? (int)((mood.Value / (double)totalEntries) * 100) : 0;
+            <div style="margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between;
+                    font-size:13px; margin-bottom:5px;
+                    color:rgba(255,255,255,0.8);">
+                    <span>@GetMoodEmoji(mood.Key) @mood.Key</span>
+                    <span style="color:#00D4FF; font-weight:700;">
+                        @mood.Value (@pct%)
+                    </span>
+                </div>
+                <div style="background:rgba(255,255,255,0.05);
+                    border-radius:20px; height:6px;">
+                    <div style="background:linear-gradient(90deg,
+                        #00D4FF, #4DB6AC);
+                        border-radius:20px; height:6px;
+                        width:@(pct)%;
+                        box-shadow:0 0 8px rgba(0,212,255,0.4);
+                        transition:width 0.8s ease;">
+                    </div>
+                </div>
+            </div>
+        }
+        @if (moodStats.Count == 0)
+        {
+            <p style="color:rgba(255,255,255,0.3); font-size:13px;
+                text-align:center; padding:20px;">
+                No mood data yet.
+            </p>
+        }
+    </div>
+
+    <!-- Top Users -->
+    <div style="@GlassPanel">
+        <div style="font-size:11px; font-weight:800;
+            color:rgba(0,212,255,0.7); letter-spacing:1px;
+            text-transform:uppercase; margin-bottom:18px;">
+            🏆 Most Active Users
+        </div>
+        @foreach (var item in userEntryCounts
+            .OrderByDescending(u => u.Value).Take(7))
+        {
+            <div style="display:flex; justify-content:space-between;
+                align-items:center; padding:10px 0;
+                border-bottom:1px solid rgba(255,255,255,0.04);">
+                <span style="font-size:13px; color:rgba(255,255,255,0.7);">
+                    👤 @(item.Key.Length > 22
+                                            ? item.Key.Substring(0, 22) + "..."
+                                            : item.Key)
+                </span>
+                <span style="font-size:12px; font-weight:700;
+                    color:#00D4FF;
+                    background:rgba(0,212,255,0.1);
+                    padding:3px 10px; border-radius:20px;
+                    border:1px solid rgba(0,212,255,0.2);">
+                    @item.Value entries
+                </span>
+            </div>
+        }
+        @if (userEntryCounts.Count == 0)
+        {
+            <p style="color:rgba(255,255,255,0.3); font-size:13px;
+                text-align:center; padding:20px;">
+                No data yet.
+            </p>
+        }
+    </div>
+</div>
+
+<!-- Recent Users Table -->
+<div style="@GlassPanel margin-bottom:20px;">
+    <div style="display:flex; justify-content:space-between;
+        align-items:center; margin-bottom:18px;">
+        <div style="font-size:11px; font-weight:800;
+            color:rgba(0,212,255,0.7); letter-spacing:1px;
+            text-transform:uppercase;">
+            👥 Recent Users
+        </div>
+        <button @onclick="GoToUsers"
+                style="padding:6px 16px;
+            background:rgba(0,212,255,0.1);
+            color:#00D4FF;
+            border:1px solid rgba(0,212,255,0.25);
+            border-radius:8px; cursor:pointer;
+            font-size:12px; font-weight:700;
+            font-family:'Plus Jakarta Sans',sans-serif;
+            transition:all 0.2s;">
+            View All →
+        </button>
+    </div>
+
+    @foreach (var user in recentUsers.Take(5))
+    {
+        <div style="display:flex; justify-content:space-between;
+            align-items:center; padding:12px 0;
+            border-bottom:1px solid rgba(255,255,255,0.04);">
+            <div style="display:flex; align-items:center; gap:12px;">
+                @if (!string.IsNullOrEmpty(user.ProfilePicture))
+                {
+                    <img src="@user.ProfilePicture"
+                         style="width:38px; height:38px; border-radius:50%;
+                    object-fit:cover;
+                    border:2px solid rgba(0,212,255,0.3);" />
+                }
+                else
+                {
+                    <div style="width:38px; height:38px; border-radius:50%;
+                        background:linear-gradient(135deg,
+                        rgba(0,212,255,0.2),
+                        rgba(77,182,172,0.2));
+                        display:flex; align-items:center;
+                        justify-content:center; font-size:16px;
+                        border:2px solid rgba(0,212,255,0.2);">
+                        👤
+                    </div>
+                }
+                <div>
+                    <div style="font-size:13px; font-weight:700;
+                        color:rgba(255,255,255,0.85);">
+                        @user.FullName
+                    </div>
+                    <div style="font-size:11px; color:rgba(255,255,255,0.35);">
+                        @user.Email
+                    </div>
+                </div>
+            </div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.25);">
+                @user.CreatedDate.ToString("MMM dd, yyyy")
+            </div>
+        </div>
+    }
+</div>
+@code {
+    int totalUsers = 0;
+    int totalEntries = 0;
+    int totalFeedbacks = 0;
+    int todayEntries = 0;
+    double avgRating = 0;
+    Dictionary<string, int> moodStats = new();
+    Dictionary<string, int> userEntryCounts = new();
+    List<ApplicationUser> recentUsers = new();
+
+    string GlassPanel =>
+        @"background:rgba(255,255,255,0.04);
+          backdrop-filter:blur(16px);
+          -webkit-backdrop-filter:blur(16px);
+          border:1px solid rgba(255,255,255,0.08);
+          border-radius:16px; padding:22px;
+          box-shadow:0 8px 32px rgba(0,0,0,0.3);";
+
+    string GlassCard(string rgb) =>
+        $@"background:rgba(255,255,255,0.04);
+           backdrop-filter:blur(16px);
+           -webkit-backdrop-filter:blur(16px);
+           border:1px solid rgba({rgb},0.2);
+           border-radius:16px; padding:22px;
+           text-align:center;
+           box-shadow:0 8px 32px rgba(0,0,0,0.3);";
+
+    protected override async Task OnInitializedAsync()
+    {
+        totalUsers = await AdminService.GetTotalUsersAsync();
+        totalEntries = await AdminService.GetTotalEntriesAsync();
+        totalFeedbacks = await AdminService.GetTotalFeedbacksAsync();
+        moodStats = await AdminService.GetMoodStatsAsync();
+        userEntryCounts = await AdminService.GetUserEntryCountsAsync();
+        recentUsers = await AdminService.GetAllUsersAsync();
+        avgRating = await AdminService.GetAverageRatingAsync();
+        todayEntries = await AdminService.GetTodayEntriesAsync();
+    }
+
+    void GoToUsers() => Navigation.NavigateTo("/admin/users");
+
+    string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😄",
+        "Sad" => "😢",
+        "Stressed" => "😫",
+        "Angry" => "😡",
+        "Neutral" => "😐",
+        "Calm" => "😌",
+        "Anxious" => "😰",
+        _ => "😐"
+    };
+}

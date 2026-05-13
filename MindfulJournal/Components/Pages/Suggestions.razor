@@ -1,0 +1,136 @@
+﻿@page "/suggestions"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+
+<PageTitle>Suggestions - Mindful Journal</PageTitle>
+
+<h2 style="font-size:22px; font-weight:700; color:#333; margin-bottom:20px;">
+    💡 Wellness Suggestions
+</h2>
+
+<!-- Weekly Mood Summary -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-title">This Week's Mood Summary</div>
+    @if (weeklyMoods.Count == 0)
+    {
+        <p style="color:#aaa;">No entries this week yet. Start journaling!</p>
+    }
+    else
+    {
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            @foreach (var mood in weeklyMoods)
+            {
+                <div style="background:#f0fafa; border:1px solid #B2DFDB;
+                    border-radius:10px; padding:12px 20px; text-align:center;">
+                    <div style="font-size:24px;">@GetMoodEmoji(mood.Key)</div>
+                    <div style="font-weight:700; color:#333;">@mood.Key</div>
+                    <div style="font-size:12px; color:#888;">@mood.Value days</div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Suggestions Cards -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-title">Personalized Suggestions</div>
+    @if (suggestions.Count == 0)
+    {
+        <p style="color:#aaa;">No suggestions yet. Add more journal entries!</p>
+    }
+    else
+    {
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:16px;">
+            @foreach (var suggestion in suggestions)
+            {
+                <div style="background:linear-gradient(135deg, #e0f2f1, #f0fafa);
+                    border:1px solid #B2DFDB; border-radius:12px;
+                    padding:20px; border-left:4px solid #4DB6AC;">
+                    <div style="font-size:28px; margin-bottom:10px;">
+                        @GetSuggestionEmoji(suggestion)
+                    </div>
+                    <div style="font-size:14px; color:#333; line-height:1.6;">
+                        @suggestion
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- All Rules Reference -->
+<div class="card">
+    <div class="card-title">How Suggestions Work</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        @foreach (var rule in rules)
+        {
+            <div style="background:#fafafa; border-radius:10px;
+                padding:14px; border:1px solid #eee;">
+                <div style="font-size:20px; margin-bottom:6px;">@rule.Emoji</div>
+                <div style="font-weight:700; color:#333;
+                    font-size:13px; margin-bottom:4px;">
+                    @rule.Mood Mood
+                </div>
+                <div style="font-size:12px; color:#888; margin-bottom:6px;">
+                    Triggers after @rule.Threshold days/week
+                </div>
+                <div style="font-size:12px; color:#555;
+                    font-style:italic; line-height:1.5;">
+                    "@rule.Message"
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    string userId = "";
+    List<string> suggestions = new();
+    Dictionary<string, int> weeklyMoods = new();
+
+    record SuggestionRule(string Emoji, string Mood, int Threshold, string Message);
+
+    List<SuggestionRule> rules = new()
+    {
+        new("😢", "Sad", 3, "You seem sad lately. Consider talking to someone you trust."),
+        new("😫", "Stressed", 3, "Stress detected. Try meditation or time management."),
+        new("😡", "Angry", 3, "Consider stress relief activities like exercise or deep breathing."),
+        new("😄", "Happy", 5, "Great! Keep up this positive momentum!"),
+        new("😰", "Anxious", 3, "Consider a calming activity if feeling anxious."),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        suggestions = await JournalService.GetSuggestionsAsync(userId);
+        weeklyMoods = await JournalService.GetWeeklyMoodCountsAsync(userId);
+    }
+
+    string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😄",
+        "Sad" => "😢",
+        "Stressed" => "😫",
+        "Angry" => "😡",
+        "Neutral" => "😐",
+        "Calm" => "😌",
+        "Anxious" => "😰",
+        _ => "😐"
+    };
+
+    string GetSuggestionEmoji(string suggestion)
+    {
+        if (suggestion.Contains("sad", StringComparison.OrdinalIgnoreCase)) return "💙";
+        if (suggestion.Contains("stress", StringComparison.OrdinalIgnoreCase)) return "🧘";
+        if (suggestion.Contains("exercise", StringComparison.OrdinalIgnoreCase)) return "🏃";
+        if (suggestion.Contains("positive", StringComparison.OrdinalIgnoreCase)) return "🌟";
+        if (suggestion.Contains("calm", StringComparison.OrdinalIgnoreCase)) return "🌿";
+        return "💡";
+    }
+}

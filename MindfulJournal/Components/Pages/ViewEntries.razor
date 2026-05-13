@@ -1,0 +1,216 @@
+﻿@page "/view-entries"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MindfulJournal.Services.JournalService JournalService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>View Entries - Mindful Journal</PageTitle>
+
+<div class="card">
+    <div style="display:flex; justify-content:space-between;
+        align-items:center; margin-bottom:20px;">
+        <h2 style="font-size:22px; font-weight:700; color:#333;">
+            My Journal Entries
+        </h2>
+        <button class="btn-primary" style="width:auto; padding:10px 20px;"
+                @onclick="GoToAddEntry">
+            + Add New Entry
+        </button>
+    </div>
+
+    <div class="filters-row">
+        <div class="filter-group">
+            <label>Search</label>
+            <input type="text" placeholder="Search title or content..."
+                   @oninput="OnSearch" />
+        </div>
+        <div class="filter-group">
+            <label>Filter by Mood</label>
+            <select @bind="selectedMoodFilter" @bind:after="ApplyFilters"
+                    style="width:100%; padding:9px 12px; border:1px solid #ddd;
+                border-radius:8px; font-size:14px; outline:none;">
+                <option value="">All Moods</option>
+                <option value="Happy">😄 Happy</option>
+                <option value="Sad">😢 Sad</option>
+                <option value="Stressed">😫 Stressed</option>
+                <option value="Angry">😡 Angry</option>
+                <option value="Neutral">😐 Neutral</option>
+                <option value="Calm">😌 Calm</option>
+                <option value="Anxious">😰 Anxious</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>From Date</label>
+            <input @bind="fromDate" @bind:after="ApplyFilters" type="date"
+                   style="width:100%; padding:9px 12px; border:1px solid #ddd;
+            border-radius:8px; font-size:14px; outline:none;" />
+        </div>
+        <div class="filter-group">
+            <label>To Date</label>
+            <input @bind="toDate" @bind:after="ApplyFilters" type="date"
+                   style="width:100%; padding:9px 12px; border:1px solid #ddd;
+            border-radius:8px; font-size:14px; outline:none;" />
+        </div>
+        <div class="filter-group" style="display:flex; align-items:flex-end;">
+            <button @onclick="ClearFilters"
+                    style="width:100%; padding:9px 12px; border:1px solid #ddd;
+                background:white; border-radius:8px; font-size:14px;
+                cursor:pointer; color:#666;">
+                Clear Filters
+            </button>
+        </div>
+    </div>
+
+    <div style="font-size:13px; color:#888; margin-bottom:16px;">
+        Showing @filteredEntries.Count of @allEntries.Count entries
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="text-align:center; padding:40px; color:#aaa;">
+            Loading entries...
+        </div>
+    }
+    else if (filteredEntries.Count == 0)
+    {
+        <div style="text-align:center; padding:40px;">
+            <div style="font-size:48px; margin-bottom:12px;">📖</div>
+            <div style="font-size:16px; color:#aaa;">No entries found.</div>
+            <button class="btn-primary"
+                    style="width:auto; padding:10px 24px; margin-top:16px;"
+                    @onclick="GoToAddEntry">
+                Write First Entry
+            </button>
+        </div>
+    }
+    else
+    {
+        @foreach (var entry in filteredEntries)
+        {
+            var id = entry.EntryId;
+            var title = entry.Title;
+            <div class="entry-card">
+               
+                <div class="entry-card-left">
+                    <div class="entry-card-date">
+                        @entry.EntryDate.ToString("MMM dd, yyyy")
+                    </div>
+                    <div class="entry-card-title">@entry.Title</div>
+                    <div class="entry-card-preview">
+                        @(entry.Content.Length > 120
+                            ? entry.Content.Substring(0, 120) + "..."
+                            : entry.Content)
+                    </div>
+                </div>
+                <div class="entry-card-right">
+                    <span class="mood-badge @entry.Mood.ToLower()">
+                        @GetMoodEmoji(entry.Mood) @entry.Mood
+                    </span>
+                    <div class="entry-actions">
+                        <button class="btn-edit"
+                                @onclick="@(() => EditEntry(id))">
+                            ✏️ Edit
+                        </button>
+                        <button class="btn-delete"
+                                @onclick="@(async () => await TryDelete(id, title))">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    string userId = "";
+    string searchText = "";
+    string selectedMoodFilter = "";
+    DateTime? fromDate = null;
+    DateTime? toDate = null;
+    bool isLoading = true;
+    List<JournalEntry> allEntries = new();
+    List<JournalEntry> filteredEntries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        await LoadEntries();
+    }
+
+    async Task LoadEntries()
+    {
+        isLoading = true;
+        StateHasChanged();
+        allEntries = await JournalService.GetEntriesAsync(userId);
+        ApplyFilters();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    void ApplyFilters()
+    {
+        filteredEntries = allEntries.Where(e =>
+            (string.IsNullOrEmpty(searchText) ||
+             e.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+             e.Content.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            &&
+            (string.IsNullOrEmpty(selectedMoodFilter) ||
+             e.Mood == selectedMoodFilter)
+            &&
+            (fromDate == null || e.EntryDate >= fromDate)
+            &&
+            (toDate == null || e.EntryDate <= toDate)
+        ).ToList();
+        StateHasChanged();
+    }
+
+    async Task OnSearch(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        ApplyFilters();
+        await Task.CompletedTask;
+    }
+
+    void GoToAddEntry() => Navigation.NavigateTo("/add-entry");
+
+    void EditEntry(int id) => Navigation.NavigateTo("/edit-entry/" + id);
+
+    async Task TryDelete(int id, string title)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>(
+            "confirm", $"Delete '{title}'? This cannot be undone.");
+
+        if (confirmed)
+        {
+            await JournalService.DeleteEntryAsync(id);
+            await LoadEntries();
+        }
+    }
+
+    void ClearFilters()
+    {
+        searchText = "";
+        selectedMoodFilter = "";
+        fromDate = null;
+        toDate = null;
+        ApplyFilters();
+    }
+
+    string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😄",
+        "Sad" => "😢",
+        "Stressed" => "😫",
+        "Angry" => "😡",
+        "Neutral" => "😐",
+        "Calm" => "😌",
+        "Anxious" => "😰",
+        _ => "😐"
+    };
+}

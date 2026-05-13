@@ -1,0 +1,295 @@
+﻿@page "/admin/users"
+@rendermode InteractiveServer
+@layout MindfulJournal.Components.Layout.AdminLayout
+@inject MindfulJournal.Services.AdminService AdminService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Manage Users - Admin</PageTitle>
+
+<h2 style="font-size:22px; font-weight:700;
+    color:rgba(255,255,255,0.9); margin-bottom:20px;">
+    👥 Manage Users
+</h2>
+
+<div style="background:rgba(255,255,255,0.04);
+    backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:16px; padding:22px;">
+
+    <div style="margin-bottom:20px;">
+        <input type="text"
+               @oninput="@(e => { searchText = e.Value?.ToString() ?? ""; ApplySearch(); })"
+               placeholder="🔍 Search by name or email..."
+               style="width:100%; padding:10px 14px;
+        background:rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.1);
+        border-radius:8px; color:rgba(255,255,255,0.9);
+        font-family:'Plus Jakarta Sans',sans-serif;
+        font-size:14px; outline:none;" />
+    </div>
+
+    <div style="font-size:12px; color:rgba(255,255,255,0.3);
+        margin-bottom:12px;">
+        Showing @filteredUsers.Count of @allUsers.Count users
+    </div>
+
+    @if (isLoading)
+    {
+        <div style="text-align:center; padding:40px;
+            color:rgba(255,255,255,0.4);">
+            Loading users...
+        </div>
+    }
+    else
+    {
+        @for (int i = 0; i < filteredUsers.Count; i++)
+        {
+            var user = filteredUsers[i];
+            var uid = user.Id;
+            var uemail = user.Email ?? "";
+
+            <div style="display:flex; justify-content:space-between;
+                align-items:center; padding:14px;
+                border:1px solid rgba(255,255,255,0.06);
+                border-radius:10px; margin-bottom:8px;
+                background:rgba(255,255,255,0.03);">
+                <div style="display:flex; align-items:center; gap:14px;">
+                    @if (!string.IsNullOrEmpty(user.ProfilePicture))
+                    {
+                        <img src="@user.ProfilePicture"
+                             style="width:44px; height:44px;
+                        border-radius:50%; object-fit:cover;
+                        border:2px solid rgba(0,212,255,0.4);" />
+                    }
+                    else
+                    {
+                        <div style="width:44px; height:44px;
+                            border-radius:50%;
+                            background:linear-gradient(135deg,
+                            rgba(0,212,255,0.2),
+                            rgba(77,182,172,0.2));
+                            display:flex; align-items:center;
+                            justify-content:center; font-size:20px;
+                            border:2px solid rgba(0,212,255,0.15);">
+                            👤
+                        </div>
+                    }
+                    <div>
+                        <div style="font-size:14px; font-weight:700;
+                            color:rgba(255,255,255,0.9);">
+                            @user.FullName
+                        </div>
+                        <div style="font-size:12px;
+                            color:rgba(255,255,255,0.4);">
+                            @user.Email
+                        </div>
+                        <div style="font-size:11px;
+                            color:rgba(255,255,255,0.25);
+                            margin-top:2px;">
+                            Joined: @user.CreatedDate.ToString("MMM dd, yyyy")
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:8px;">
+                    <button @onclick="@(() => ViewEntries(uid))"
+                            style="padding:7px 14px;
+                        background:rgba(0,212,255,0.1);
+                        color:#00D4FF;
+                        border:1px solid rgba(0,212,255,0.25);
+                        border-radius:6px; cursor:pointer;
+                        font-size:12px; font-weight:700;
+                        font-family:'Plus Jakarta Sans',sans-serif;">
+                        📝 Entries
+                    </button>
+                    <button @onclick="@(() => ConfirmDelete(uid, uemail))"
+                            style="padding:7px 14px;
+                        background:rgba(244,67,54,0.1);
+                        color:#EF9A9A;
+                        border:1px solid rgba(244,67,54,0.2);
+                        border-radius:6px; cursor:pointer;
+                        font-size:12px; font-weight:700;
+                        font-family:'Plus Jakarta Sans',sans-serif;">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showEntriesModal)
+{
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7);
+        display:flex; align-items:center; justify-content:center;
+        z-index:999; backdrop-filter:blur(6px);">
+        <div style="background:rgba(10,22,40,0.95);
+            border:1px solid rgba(0,212,255,0.3);
+            border-radius:18px; padding:28px;
+            width:580px; max-height:80vh; overflow-y:auto;">
+            <h3 style="color:rgba(255,255,255,0.9); margin-bottom:16px;">
+                📝 User Entries (@userEntries.Count)
+            </h3>
+            @if (userEntries.Count == 0)
+            {
+                <p style="color:rgba(255,255,255,0.3); text-align:center;
+                    padding:20px;">
+                    No entries found.
+                </p>
+            }
+            @foreach (var entry in userEntries)
+            {
+                <div style="padding:10px 12px;
+                    border:1px solid rgba(255,255,255,0.06);
+                    border-radius:8px; margin-bottom:8px;
+                    background:rgba(255,255,255,0.03);">
+                    <div style="display:flex; justify-content:space-between;
+                        align-items:center;">
+                        <span style="font-weight:700; font-size:13px;
+                            color:rgba(255,255,255,0.85);">
+                            @entry.Title
+                        </span>
+                        <span style="font-size:12px; padding:3px 10px;
+                            background:rgba(0,212,255,0.1);
+                            color:#00D4FF; border-radius:20px;
+                            border:1px solid rgba(0,212,255,0.2);">
+                            @entry.Mood
+                        </span>
+                    </div>
+                    <div style="font-size:11px; color:rgba(255,255,255,0.3);
+                        margin-top:4px;">
+                        @entry.EntryDate.ToString("MMM dd, yyyy")
+                    </div>
+                </div>
+            }
+            <button @onclick="CloseEntriesModal"
+                    style="width:100%; margin-top:16px; padding:10px;
+                background:linear-gradient(135deg,#00D4FF,#4DB6AC);
+                color:#0a1628; border:none; border-radius:8px;
+                cursor:pointer; font-weight:700; font-size:14px;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+                Close
+            </button>
+        </div>
+    </div>
+}
+
+@if (showDeleteModal)
+{
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7);
+        display:flex; align-items:center; justify-content:center;
+        z-index:999; backdrop-filter:blur(6px);">
+        <div style="background:rgba(10,22,40,0.95);
+            border:1px solid rgba(244,67,54,0.3);
+            border-radius:18px; padding:32px;
+            width:360px; text-align:center;">
+            <div style="font-size:36px; margin-bottom:12px;">⚠️</div>
+            <h3 style="color:rgba(255,255,255,0.9); margin-bottom:8px;">
+                Delete User?
+            </h3>
+            <p style="color:#EF9A9A; font-size:13px; margin-bottom:6px;
+                font-weight:600;">
+                @deleteEmail
+            </p>
+            <p style="color:rgba(255,255,255,0.4); font-size:12px;
+                margin-bottom:24px;">
+                This deletes the user and ALL their entries!
+            </p>
+            <div style="display:flex; gap:12px;">
+                <button @onclick="DeleteUser"
+                        style="flex:1; padding:10px; background:#ef5350;
+                    color:white; border:none; border-radius:8px;
+                    cursor:pointer; font-weight:700; font-size:14px;
+                    font-family:'Plus Jakarta Sans',sans-serif;">
+                    Yes, Delete
+                </button>
+                <button @onclick="CloseDeleteModal"
+                        style="flex:1; padding:10px;
+                    background:rgba(255,255,255,0.08);
+                    color:rgba(255,255,255,0.6);
+                    border:none; border-radius:8px;
+                    cursor:pointer; font-weight:700; font-size:14px;
+                    font-family:'Plus Jakarta Sans',sans-serif;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<ApplicationUser> allUsers = new();
+    List<ApplicationUser> filteredUsers = new();
+    List<JournalEntry> userEntries = new();
+    bool showEntriesModal = false;
+    bool showDeleteModal = false;
+    bool isLoading = true;
+    string deleteId = "";
+    string deleteEmail = "";
+    string searchText = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    async Task LoadUsers()
+    {
+        isLoading = true;
+        StateHasChanged();
+        allUsers = await AdminService.GetAllUsersAsync();
+        filteredUsers = allUsers.ToList();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    void ApplySearch()
+    {
+        filteredUsers = allUsers.Where(u =>
+            string.IsNullOrEmpty(searchText) ||
+            u.FullName.Contains(searchText,
+                StringComparison.OrdinalIgnoreCase) ||
+            (u.Email ?? "").Contains(searchText,
+                StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+        StateHasChanged();
+    }
+
+    async Task ViewEntries(string userId)
+    {
+        userEntries = await AdminService.GetUserEntriesAsync(userId);
+        showEntriesModal = true;
+        StateHasChanged();
+    }
+
+    void CloseEntriesModal()
+    {
+        showEntriesModal = false;
+        StateHasChanged();
+    }
+
+    void ConfirmDelete(string userId, string email)
+    {
+        deleteId = userId;
+        deleteEmail = email;
+        showDeleteModal = true;
+        StateHasChanged();
+    }
+
+    void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        StateHasChanged();
+    }
+
+    async Task DeleteUser()
+    {
+        string idToDelete = deleteId;
+        showDeleteModal = false;
+        StateHasChanged();
+        await AdminService.DeleteUserAsync(idToDelete);
+        await LoadUsers();
+    }
+}

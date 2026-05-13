@@ -1,0 +1,141 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lib/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="app.css?v=30" />
+    <HeadOutlet />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="charts.js"></script>
+
+    <script>
+        let vantaWaves = null;
+        let vantaNet = null;
+
+        // For main app - WAVES effect
+        window.initVantaWaves = function (elementId) {
+        try {
+        if (vantaWaves) { vantaWaves.destroy(); vantaWaves = null; }
+        const el = document.getElementById(elementId);
+        if (!el || typeof VANTA === 'undefined') return;
+        vantaWaves = VANTA.WAVES({
+        el: el,
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        color: 0x0a1628,
+        shininess: 90.00,
+        waveHeight: 35.00,
+        waveSpeed: 1.20,
+        zoom: 0.72
+        });
+        } catch (e) { console.log('VantaWaves error:', e); }
+        };
+
+        window.destroyVantaWaves = function () {
+        try {
+        if (vantaWaves) { vantaWaves.destroy(); vantaWaves = null; }
+        } catch (e) { }
+        };
+
+        // For admin - NET effect
+        window.initVantaNet = function (elementId) {
+        try {
+        if (vantaNet) { vantaNet.destroy(); vantaNet = null; }
+        const el = document.getElementById(elementId);
+        if (!el || typeof VANTA === 'undefined') return;
+        vantaNet = VANTA.NET({
+        el: el,
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        scaleMobile: 1.00,
+        color: 0x00d4ff,
+        backgroundColor: 0x020b18,
+        points: 14.00,
+        maxDistance: 31.00,
+        spacing: 14.00
+        });
+        } catch (e) { console.log('VantaNet error:', e); }
+        };
+
+        window.destroyVantaNet = function () {
+        try {
+        if (vantaNet) { vantaNet.destroy(); vantaNet = null; }
+        } catch (e) { }
+        };
+
+        // Keep old initVanta for backward compat
+        window.initVanta = window.initVantaWaves;
+        window.destroyVanta = window.destroyVantaWaves;
+
+        window.checkSpeechSupport = function () {
+        return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        };
+
+        window.initSpeechRecognition = function (dotNetRef) {
+        const SpeechRecognition = window.SpeechRecognition
+        || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+        window._recognition = new SpeechRecognition();
+        window._recognition.continuous = true;
+        window._recognition.interimResults = true;
+        window._recognition.lang = 'en-US';
+        window._recognition.onresult = function (event) {
+        let finalText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal)
+        finalText += event.results[i][0].transcript + ' ';
+        }
+        if (finalText.trim())
+        dotNetRef.invokeMethodAsync('UpdateTranscript', finalText.trim());
+        };
+        window._recognition.onerror = function () {
+        dotNetRef.invokeMethodAsync('StopRecordingCallback');
+        };
+        window._recognition.onend = function () {
+        dotNetRef.invokeMethodAsync('StopRecordingCallback');
+        };
+        };
+
+        window.startRecording = function () {
+        if (window._recognition) {
+        try { window._recognition.start(); } catch (e) { }
+        }
+        };
+
+        window.stopRecording = function () {
+        if (window._recognition) {
+        try { window._recognition.stop(); } catch (e) { }
+        }
+        };
+
+        window.getLocalStorage = function (key) {
+        return localStorage.getItem(key);
+        };
+
+        window.setLocalStorage = function (key, value) {
+        localStorage.setItem(key, value);
+        };
+    </script>
+    <script src="_framework/blazor.server.js"></script>
+</body>
+
+</html>

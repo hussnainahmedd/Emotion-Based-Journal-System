@@ -1,0 +1,146 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject UserManager<ApplicationUser> UserManager
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+
+<div class="page-wrapper">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            🧘 Mindful Journal
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <nav class="sidebar-nav">
+                    <a href="/dashboard"
+                       class="nav-item @IsActive("/dashboard")">
+                        <span>⊞</span> Dashboard
+                    </a>
+                    <a href="/add-entry"
+                       class="nav-item @IsActive("/add-entry")">
+                        <span>+</span> Add Entry
+                    </a>
+                    <a href="/voice-entry"
+                       class="nav-item @IsActive("/voice-entry")">
+                        <span>🎤</span> Voice Entry
+                    </a>
+                    <a href="/view-entries"
+                       class="nav-item @IsActive("/view-entries")">
+                        <span>☰</span> View Entries
+                    </a>
+                    <a href="/analytics"
+                       class="nav-item @IsActive("/analytics")">
+                        <span>📊</span> Analytics
+                    </a>
+                    <a href="/ai-suggestions"
+                       class="nav-item @IsActive("/ai-suggestions")">
+                        <span>🤖</span> AI Insights
+                    </a>
+                    <a href="/suggestions"
+                       class="nav-item @IsActive("/suggestions")">
+                        <span>💡</span> Suggestions
+                    </a>
+                    <a href="/feedback"
+                       class="nav-item @IsActive("/feedback")">
+                        <span>💬</span> Feedback
+                    </a>
+                    <a href="/profile"
+                       class="nav-item @IsActive("/profile")">
+                        <span>👤</span> Profile
+                    </a>
+                    <a href="/settings"
+                       class="nav-item @IsActive("/settings")">
+                        <span>⚙</span> Settings
+                    </a>
+
+                </nav>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <a href="/admin"
+                   class="nav-item"
+                   style="margin-top:auto; border-top:1px solid rgba(255,255,255,0.06);
+                    color:rgba(255,165,0,0.7);">
+                    <span>🛡️</span> Admin Panel
+                </a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="topbar-user">
+                        @if (!string.IsNullOrEmpty(profilePic))
+                        {
+                            <img src="@profilePic"
+                                 style="width:38px; height:38px;
+                            border-radius:50%;
+                            object-fit:cover;
+                            border:2px solid rgba(77,182,172,0.5);
+                            box-shadow:0 0 12px rgba(77,182,172,0.3);" />
+                        }
+                        else
+                        {
+                            <div class="user-avatar">👤</div>
+                        }
+                        <span class="user-name">
+                            @context.User.Identity?.Name
+                        </span>
+                        <form method="post" action="/logout">
+                            <button type="submit" class="btn-logout">
+                                Logout
+                            </button>
+                        </form>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+
+        <!-- Page Content -->
+        <div class="content-area">
+            @Body
+        </div>
+
+    </div>
+</div>
+
+@code {
+    string profilePic = "";
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (AuthState != null)
+            {
+                var authState = await AuthState;
+                var userId = authState.User.FindFirst(
+                    System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var user = await UserManager.FindByIdAsync(userId);
+                    if (user != null &&
+                        !string.IsNullOrEmpty(user.ProfilePicture))
+                        profilePic = user.ProfilePicture;
+                }
+            }
+        }
+        catch { }
+    }
+
+    string IsActive(string path) =>
+        Navigation.Uri.Contains(path) ? "active" : "";
+}

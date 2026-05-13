@@ -1,0 +1,497 @@
+﻿@page "/profile"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout MindfulJournal.Components.Layout.MainLayout
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject MindfulJournal.Services.JournalService JournalService
+@inject NavigationManager Navigation
+
+<PageTitle>Profile - Mindful Journal</PageTitle>
+
+<div style="max-width:750px;">
+
+    <!-- Header -->
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:28px;">
+        <div>
+            <h2 style="font-size:24px; font-weight:800;
+                color:rgba(255,255,255,0.9); margin-bottom:4px;">
+                My Profile
+            </h2>
+            <p style="font-size:13px; color:rgba(255,255,255,0.35);">
+                Manage your personal information and preferences
+            </p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert-success" style="margin-bottom:20px;">
+            ✅ @successMessage
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-message" style="margin-bottom:20px;">
+            ❌ @errorMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div style="text-align:center; padding:60px;
+            color:rgba(255,255,255,0.4);">
+            <div style="font-size:32px; margin-bottom:12px;">⏳</div>
+            Loading profile...
+        </div>
+    }
+    else
+    {
+        <!-- Profile Stats Banner -->
+        <div style="display:grid; grid-template-columns:repeat(3,1fr);
+            gap:14px; margin-bottom:20px;">
+            <div style="background:rgba(77,182,172,0.08);
+                border:1px solid rgba(77,182,172,0.2);
+                border-radius:12px; padding:16px; text-align:center;">
+                <div style="font-size:26px; font-weight:800;
+                    color:#4DB6AC;">
+                    @totalEntries
+                </div>
+                <div style="font-size:11px; color:rgba(255,255,255,0.4);
+                    text-transform:uppercase; letter-spacing:0.5px;
+                    margin-top:4px;">
+                    Journal Entries
+                </div>
+            </div>
+            <div style="background:rgba(100,181,246,0.08);
+                border:1px solid rgba(100,181,246,0.2);
+                border-radius:12px; padding:16px; text-align:center;">
+                <div style="font-size:26px; font-weight:800;
+                    color:#64B5F6;">
+                    @currentStreak
+                </div>
+                <div style="font-size:11px; color:rgba(255,255,255,0.4);
+                    text-transform:uppercase; letter-spacing:0.5px;
+                    margin-top:4px;">
+                    Day Streak 🔥
+                </div>
+            </div>
+            <div style="background:rgba(171,71,188,0.08);
+                border:1px solid rgba(171,71,188,0.2);
+                border-radius:12px; padding:16px; text-align:center;">
+                <div style="font-size:26px; font-weight:800;
+                    color:#AB47BC;">
+                    @GetMoodEmoji(mostCommonMood)
+                </div>
+                <div style="font-size:11px; color:rgba(255,255,255,0.4);
+                    text-transform:uppercase; letter-spacing:0.5px;
+                    margin-top:4px;">
+                    Top Mood: @mostCommonMood
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Picture + Basic Info -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title">🖼️ Profile Picture & Identity</div>
+
+            <div style="display:flex; align-items:center; gap:24px;
+                margin-bottom:20px; padding-bottom:20px;
+                border-bottom:1px solid rgba(255,255,255,0.06);">
+                <div style="flex-shrink:0; position:relative;">
+                    @if (!string.IsNullOrEmpty(profilePicBase64))
+                    {
+                        <img src="@profilePicBase64"
+                             style="width:90px; height:90px; border-radius:50%;
+                        object-fit:cover;
+                        border:3px solid rgba(77,182,172,0.5);
+                        box-shadow:0 0 20px rgba(77,182,172,0.2);" />
+                    }
+                    else
+                    {
+                        <div style="width:90px; height:90px; border-radius:50%;
+                            background:linear-gradient(135deg,
+                            rgba(77,182,172,0.3),
+                            rgba(0,137,123,0.3));
+                            border:3px solid rgba(77,182,172,0.4);
+                            display:flex; align-items:center;
+                            justify-content:center; font-size:36px;">
+                            👤
+                        </div>
+                    }
+                </div>
+
+                <div style="flex:1;">
+                    <div style="font-size:18px; font-weight:800;
+                        color:rgba(255,255,255,0.9); margin-bottom:4px;">
+                        @fullName
+                    </div>
+                    <div style="font-size:13px; color:rgba(255,255,255,0.4);
+                        margin-bottom:8px;">
+                        @email
+                    </div>
+                    <div style="font-size:12px; color:rgba(77,182,172,0.6);">
+                        🗓️ Member since @memberSince
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <InputFile OnChange="HandleImageUpload"
+                               accept="image/*"
+                               style="display:none;" id="fileInput" />
+                    <label for="fileInput"
+                           style="padding:8px 16px;
+                        background:rgba(77,182,172,0.12);
+                        color:#4DB6AC;
+                        border:1px solid rgba(77,182,172,0.3);
+                        border-radius:8px; cursor:pointer;
+                        font-size:12px; font-weight:700;
+                        font-family:'Plus Jakarta Sans',sans-serif;
+                        text-align:center;">
+                        📁 Change Photo
+                    </label>
+                    @if (!string.IsNullOrEmpty(profilePicBase64))
+                    {
+                        <button @onclick="RemoveProfilePic"
+                                style="padding:8px 16px;
+                            background:rgba(244,67,54,0.1);
+                            color:#EF9A9A;
+                            border:1px solid rgba(244,67,54,0.2);
+                            border-radius:8px; cursor:pointer;
+                            font-size:12px; font-weight:700;
+                            font-family:'Plus Jakarta Sans',sans-serif;">
+                            🗑️ Remove
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (picChanged)
+            {
+                <button class="btn-primary" style="margin-bottom:16px;"
+                        @onclick="SaveProfilePic" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "💾 Save Profile Picture")
+                </button>
+            }
+
+            <!-- Personal Info -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input @bind="fullName" type="text"
+                           placeholder="Your full name" />
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input @bind="email" type="email"
+                           placeholder="Your email" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Bio / About Me</label>
+                <textarea @bind="bio" rows="3"
+                          placeholder="Tell us a little about yourself..."
+                          style="width:100%; padding:10px 14px;
+                background:rgba(255,255,255,0.06);
+                border:1.5px solid rgba(255,255,255,0.1);
+                border-radius:10px;
+                color:rgba(255,255,255,0.9);
+                font-family:'Plus Jakarta Sans',sans-serif;
+                font-size:14px; resize:vertical; outline:none;">
+            </textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Location</label>
+            <input @bind="location" type="text"
+                   placeholder="e.g. Lahore, Pakistan" />
+        </div>
+
+        <button class="btn-primary" style="width:auto; padding:10px 28px;"
+                @onclick="UpdateProfile" disabled="@isSaving">
+            @(isSaving ? "Saving..." : "✅ Update Profile")
+        </button>
+    </div>
+
+    <!-- Wellness Goal -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">🎯 Wellness Goal</div>
+        <p style="font-size:13px; color:rgba(255,255,255,0.4);
+            margin-bottom:16px;">
+            Set a personal wellness goal to stay motivated
+        </p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr;
+            gap:10px; margin-bottom:16px;">
+            @foreach (var goal in wellnessGoals)
+            {
+                var g = goal;
+                <div @onclick="@(() => selectedGoal = g)"
+                     style="padding:12px 16px;
+                    border:1.5px solid @(selectedGoal == g
+                                                         ? "rgba(77,182,172,0.6)"
+                                                         : "rgba(255,255,255,0.08)");
+                    border-radius:10px; cursor:pointer;
+                    background:@(selectedGoal == g
+                                                         ? "rgba(77,182,172,0.12)"
+                                                         : "rgba(255,255,255,0.03)");
+                    transition:all 0.2s;
+                    font-size:13px;
+                    color:@(selectedGoal == g
+                                                         ? "#4DB6AC"
+                                                         : "rgba(255,255,255,0.6)");">
+                    @g
+                </div>
+            }
+        </div>
+
+        <button class="btn-primary" style="width:auto; padding:10px 28px;"
+                @onclick="SaveGoal" disabled="@isSaving">
+            @(isSaving ? "Saving..." : "🎯 Save Goal")
+        </button>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+        <div class="card-title">🔒 Change Password</div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr;
+            gap:16px;">
+            <div class="form-group">
+                <label>Current Password</label>
+                <input @bind="currentPassword" type="password"
+                       placeholder="••••••" />
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input @bind="newPassword" type="password"
+                       placeholder="••••••" />
+            </div>
+            <div class="form-group">
+                <label>Confirm Password</label>
+                <input @bind="confirmPassword" type="password"
+                       placeholder="••••••" />
+            </div>
+        </div>
+
+        <button class="btn-primary" style="width:auto; padding:10px 28px;"
+                @onclick="ChangePassword" disabled="@isChangingPassword">
+            @(isChangingPassword ? "Changing..." : "🔒 Change Password")
+        </button>
+    </div>
+}
+</div>
+
+@code {
+    string userId = "";
+    string fullName = "";
+    string email = "";
+    string bio = "";
+    string location = "";
+    string profilePicBase64 = "";
+    string currentPassword = "";
+    string newPassword = "";
+    string confirmPassword = "";
+    string successMessage = "";
+    string errorMessage = "";
+    string memberSince = "";
+    string selectedGoal = "";
+    string mostCommonMood = "None";
+    int totalEntries = 0;
+    int currentStreak = 0;
+    bool isSaving = false;
+    bool isChangingPassword = false;
+    bool picChanged = false;
+    bool isLoading = true;
+
+    List<string> wellnessGoals = new()
+    {
+        "😊 Journal every day",
+        "🧘 Reduce stress levels",
+        "😴 Improve sleep quality",
+        "💪 Build positive habits",
+        "🎯 Track mood patterns",
+        "🌟 Maintain happiness streak",
+        "🏃 Stay physically active",
+        "📖 Practice mindfulness daily"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider
+                .GetAuthenticationStateAsync();
+            userId = authState.User.FindFirst(
+                System.Security.Claims.ClaimTypes.NameIdentifier)
+                ?.Value ?? "";
+
+            await LoadUser();
+            await LoadStats();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error loading profile: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    async Task LoadUser()
+    {
+        var user = await UserManager.FindByIdAsync(userId);
+        if (user != null)
+        {
+            fullName = user.FullName ?? "";
+            email = user.Email ?? "";
+            profilePicBase64 = user.ProfilePicture ?? "";
+            memberSince = user.CreatedDate.ToString("MMMM yyyy");
+        }
+    }
+
+    async Task LoadStats()
+    {
+        totalEntries = await JournalService.GetTotalEntriesAsync(userId);
+        mostCommonMood = await JournalService.GetMostCommonMoodAsync(userId);
+        currentStreak = await JournalService.GetStreakAsync(userId);
+    }
+
+    async Task HandleImageUpload(InputFileChangeEventArgs e)
+    {
+        errorMessage = "";
+        try
+        {
+            var file = e.File;
+            if (file.Size > 2 * 1024 * 1024)
+            {
+                errorMessage = "Image too large. Max 2MB.";
+                return;
+            }
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            profilePicBase64 = $"data:{file.ContentType};base64,"
+                + Convert.ToBase64String(bytes);
+            picChanged = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Upload error: " + ex.Message;
+        }
+    }
+
+    async Task SaveProfilePic()
+    {
+        isSaving = true;
+        StateHasChanged();
+        var user = await UserManager.FindByIdAsync(userId);
+        if (user != null)
+        {
+            user.ProfilePicture = profilePicBase64;
+            await UserManager.UpdateAsync(user);
+            successMessage = "Profile picture saved! Refresh to see in topbar.";
+            picChanged = false;
+        }
+        isSaving = false;
+        StateHasChanged();
+    }
+
+    void RemoveProfilePic()
+    {
+        profilePicBase64 = "";
+        picChanged = true;
+        StateHasChanged();
+    }
+
+    async Task UpdateProfile()
+    {
+        errorMessage = "";
+        successMessage = "";
+        isSaving = true;
+        StateHasChanged();
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                user.FullName = fullName;
+                user.Email = email;
+                user.UserName = email;
+                var result = await UserManager.UpdateAsync(user);
+                successMessage = result.Succeeded
+                    ? "Profile updated successfully!"
+                    : string.Join(", ",
+                        result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+        }
+        isSaving = false;
+        StateHasChanged();
+    }
+
+    async Task SaveGoal()
+    {
+        if (string.IsNullOrEmpty(selectedGoal)) return;
+        isSaving = true;
+        StateHasChanged();
+        await Task.Delay(500);
+        successMessage = $"Goal set: {selectedGoal}";
+        isSaving = false;
+        StateHasChanged();
+    }
+
+    async Task ChangePassword()
+    {
+        errorMessage = "";
+        successMessage = "";
+        if (newPassword != confirmPassword)
+        { errorMessage = "Passwords do not match."; return; }
+        if (newPassword.Length < 6)
+        { errorMessage = "Min 6 characters required."; return; }
+
+        isChangingPassword = true;
+        StateHasChanged();
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                var result = await UserManager.ChangePasswordAsync(
+                    user, currentPassword, newPassword);
+                if (result.Succeeded)
+                {
+                    successMessage = "Password changed successfully!";
+                    currentPassword = newPassword = confirmPassword = "";
+                }
+                else
+                    errorMessage = string.Join(", ",
+                        result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+        }
+        isChangingPassword = false;
+        StateHasChanged();
+    }
+
+    string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😄",
+        "Sad" => "😢",
+        "Stressed" => "😫",
+        "Angry" => "😡",
+        "Neutral" => "😐",
+        "Calm" => "😌",
+        "Anxious" => "😰",
+        _ => "😊"
+    };
+}
